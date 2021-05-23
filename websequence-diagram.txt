@@ -1,0 +1,22 @@
+# use with https://www.websequencediagrams.com/
+title IOTA Bike Rental
+
+actor Customer
+actor Agent
+actor Operator
+
+note over Customer, Agent: Transactions on IOTA Tagle
+note over Agent, Operator: Direct HTTPS connection
+
+Operator->Customer: Publish x free bikes, minimum deposit
+
+Customer->Agent: Request Bike, x Mi Deposit, Change Address, My PK
+Agent->Operator: Provide cutsomer public key
+Customer->Operator: Opens bike, bikes verifies public key (sign a challange)
+Customer->Operator: Return bike
+Operator->Agent: Bike Return, hh:mm in use
+
+note over Customer, Agent, Operator: Transactions on IOTA Tagle
+Agent->Customer: Returs rest value
+Agent->Operator: Pay operator fee (microtransaction)
+Agent->Agent: Keep agent fee
