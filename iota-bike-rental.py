@@ -11,7 +11,6 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.exceptions import InvalidSignature
 from datetime import datetime, date, time, timezone, timedelta
 
-
 from secret_seed import own_node_url, seedAccountA, seedAccountB, fire_fly_return_address, private_key_value_text_bike_operator, public_key_value_text_bike_operator, \
     private_key_value_text_bike_user, public_key_value_text_bike_user 
 
@@ -19,20 +18,22 @@ import iota_client
 
 def check_health(client):
     get_info = client.get_info()
-    # print('This is what the node reports: %s' % get_info)
+    # you may test the same API with curl: enter on a command line
+    #   curl 'https://chrysalis-nodes.iota.org/api/v1/info' 
+
     if get_info['nodeinfo']['is_healthy']:
         is_healthy = 'healthy'
     else:
         is_healthy = 'not in sync'
     milestones_in_database = get_info['nodeinfo']['latest_milestone_index'] - get_info['nodeinfo']['pruning_index']
-    milestone = client.get_milestone(get_info['nodeinfo']['pruning_index']+10)
+    milestone = client.get_milestone(get_info['nodeinfo']['pruning_index']+1000)
     timestampMilestone = datetime.fromtimestamp(milestone['timestamp'], tz=timezone.utc)
     if get_info['url'] != own_node_url:
         node_name = ' ' + get_info['url']
     else:
         node_name = ''
-    print('The %s node%s is %s and spans over %s milestones in database, data since %s' %(get_info['nodeinfo']['network_id'], node_name, is_healthy, "{:,}".format(milestones_in_database), timestampMilestone))
-
+    print('The %s node%s is %s and spans over %s milestones in database, data since %s' 
+        %(get_info['nodeinfo']['network_id'], node_name, is_healthy, "{:,}".format(milestones_in_database), timestampMilestone))
 
 def get_balance(client, seed:str, account_index:int = 0):
     balance = client.get_balance(
@@ -229,7 +230,7 @@ def request_to_rent_a_bike(client, seed:str, account_index:int, provider_address
     print(bike_request_object)
     message = json.dumps(bike_request_object).encode('utf-8')
 
-    send_value(client, seed=seed, account_index=0, address=provider_address, value= 5_000_000, index=message_index, data=message)
+    send_value(client, seed=seed, account_index=0, address=provider_address, value= 5_000_000, index=message_index, data=message, wait_confirmation=True)
     return
 
 def find_bike_rental_request(client, seed:str, account_index=0, rental_address_index=0, minimum_deposit=5_000_000) -> tuple:
@@ -312,6 +313,7 @@ def release_bike(client, seed:str, account_index=0, rental_address_index=0, mini
                     }
                 ],
                 index="Rent a bike rejected")
+            client.retry_until_included(message_id = message['message_id'])
             print("Rejected bike hire due too low deposit, returned fund, message id: %s " % message)
             continue
 
@@ -439,25 +441,33 @@ def send_back_funds_to_firefly_account(client, seed:str, account_index:int = 0, 
     else:
         return None
 
+# consolidate fractional UTXOfor this account into a single UTXO to avoid dust change in transactions
+def consolidate_outputs(client, seed:str, account_index:int = 0):
+    balance = get_balance(client, seed, account_index)
+    if balance > 1_000_000:
+        # end all balance to a single address on position 0
+        address = client.get_addresses(seed=seed, account_index=0, input_range_begin=0, input_range_end=1, get_all=False)[0][0]
+        send_value(client, seed=seed, account_index=account_index, address=address, value=balance, wait_confirmation=True)
+    return
+
 
 if __name__ == '__main__':
 
-    # define test cases
+    # make sure you have anough IOTAs in Accoutn A to start with. For example, assigned to the frist address of Account A 20 Mis
+    # you can send all funds back your FireFly account configuired in secret_seed.py and set below "do_send_back_tofirefly = True"
+
+    # enable test cases
     use_own_node = True
-    list_addresses_account_a = False
-    list_addresses_account_b = False
-    do_allow_dust_addresses = False
-    do_publish_free_bikes = False
-    do_get_free_bikes = False
-    do_request_rent_a_bike = False
-    do_release_bike = False
-    do_return_bike = False
+    list_addresses_account_a = True
+    list_addresses_account_b = True
+    do_allow_dust_addresses = True
+    do_publish_free_bikes = True
+    do_get_free_bikes = True
+    do_request_rent_a_bike = True
+    do_release_bike = True
+    do_return_bike = True
     do_reset_funds = False
     do_send_back_tofirefly = False
-
-    print(public_key_value_text_bike_user().public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo))
 
     if use_own_node:
         client = iota_client.Client(nodes_name_password=[[own_node_url]], local_pow=True)
@@ -468,13 +478,22 @@ if __name__ == '__main__':
     rental_address_index = 0
     rental_address = client.get_addresses(seed=seedAccountB, account_index=0,input_range_begin=rental_address_index,input_range_end=rental_address_index+1, get_all=False)[rental_address_index][0]
     minimum_deposit = 5_000_000
-    print('Rental address: %s' % rental_address)
+    # print('Rental address: %s' % rental_address)
 
     service_addresses = client.get_addresses(seed=seedAccountB, account_index=0,input_range_begin=2,input_range_end=5, get_all=False)
     agent_address = service_addresses[0][0]
     bike_operator_address = service_addresses[1][0]
     insurance_address = service_addresses[2][0]
 
+    if list_addresses_account_a:
+        print()
+        list_account_balance_and_addresses(client, seed=seedAccountA, account_index=0, number_addresses=3, name="Account A (customer)")
+
+    if list_addresses_account_b:
+        print()
+        list_account_balance_and_addresses(client, seed=seedAccountB, account_index=0, number_addresses=6, name="Account B (agent and bike operator)")
+
+    # enable dust on addresses
     if do_allow_dust_addresses:
         if not is_dust_enabled(client, agent_address):
             create_dust_allowed_address(client, seedAccountA, account_index=0, dust_address=agent_address, number_of_dust_transactions=10)
@@ -482,12 +501,6 @@ if __name__ == '__main__':
             create_dust_allowed_address(client, seedAccountA, account_index=0, dust_address=bike_operator_address, number_of_dust_transactions=10)
         if not is_dust_enabled(client, insurance_address):
             create_dust_allowed_address(client, seedAccountA, account_index=0, dust_address=insurance_address, number_of_dust_transactions=10)
-
-    if list_addresses_account_a:
-        list_account_balance_and_addresses(client, seed=seedAccountA, account_index=0, number_addresses=3, name="Account A (customer)")
-
-    if list_addresses_account_b:
-        list_account_balance_and_addresses(client, seed=seedAccountB, account_index=0, number_addresses=6, name="Account B (agent and bike operator)")
 
     # publish a free bike message
     if do_publish_free_bikes:
@@ -504,6 +517,7 @@ if __name__ == '__main__':
             print("We have %d bikes to rent, last published on %s" % (free_bikes, timestamp_published.astimezone()))
         
             if do_request_rent_a_bike:
+                consolidate_outputs(client=client, seed=seedAccountA, account_index=0)
                 request_to_rent_a_bike(client=client, seed=seedAccountA, account_index=0,
                     provider_address= rental_address, deposit=minimum_deposit, public_key=public_key_value_text_bike_user())
 
@@ -540,7 +554,11 @@ if __name__ == '__main__':
         send_back_funds_to_firefly_account(client, seed = seedAccountA, account_index = 0)
         send_back_funds_to_firefly_account(client, seed = seedAccountB, account_index = 0)
 
-        
+    if list_addresses_account_a:
+        print()
+        list_account_balance_and_addresses(client, seed=seedAccountA, account_index=0, number_addresses=3, name="Account A (customer)")
 
-
+    if list_addresses_account_b:
+        print()
+        list_account_balance_and_addresses(client, seed=seedAccountB, account_index=0, number_addresses=6, name="Account B (agent and bike operator)")
 
