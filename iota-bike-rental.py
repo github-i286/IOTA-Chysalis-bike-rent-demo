@@ -32,8 +32,8 @@ def check_health(client):
         node_name = ' ' + get_info['url']
     else:
         node_name = ''
-    print('The %s node%s is %s and spans over %s milestones in database, data since %s' 
-        %(get_info['nodeinfo']['network_id'], node_name, is_healthy, "{:,}".format(milestones_in_database), timestampMilestone))
+    print('The node%s on the network %s is %s and spans over %s milestones in database with a message history back to %s' 
+        %(node_name, get_info['nodeinfo']['network_id'], is_healthy, "{:,}".format(milestones_in_database), timestampMilestone))
 
 def get_balance(client, seed:str, account_index:int = 0):
     balance = client.get_balance(
@@ -68,10 +68,12 @@ def list_account_balance_and_addresses(client:str, seed:str, account_index:int =
 
 def create_data_only_message(client, index:str, data:str, wait_confirmation:bool = True):
     message = client.message(index=index, data=data.encode("utf8"))
-    print("Posted a data message with message id: %s" % message['message_id'])
+    print("Posted a data message with message id: %s" % message['message_id'], end='', flush=True)
     if wait_confirmation:
         client.retry_until_included(message_id = message['message_id'])
-        print("Now confirmed")
+        print(" - now confirmed")
+    else:
+        print('')
     return message
 
 
@@ -99,9 +101,9 @@ def publish_free_bikes(client, free_bikes: int, deposit:int = 5_000_000) -> str:
 
     publish_message_object = {"free_bike": free_bike, "signature": hash_signature.hex()}
     publish_message = json.dumps(publish_message_object)
-    print(publish_message) 
+    #print(publish_message) 
     index = 'Bike Rental ' + timestamp[0:10]
-    print(index)
+    #print(index)
     return create_data_only_message(client, index=index, data = publish_message, wait_confirmation=True)
 
 def get_free_bikes(client) -> tuple:
@@ -109,7 +111,6 @@ def get_free_bikes(client) -> tuple:
     messages_ids = client.get_message_index(index)
     if len(messages_ids) == 0:
         print("No bikes to rent today so far") 
-    #print('Messages: %s' % messages_ids)
 
     timestamp_latest_message = datetime(2000,1,1, tzinfo=timezone.utc)
     free_bikes_latest_message = 0
@@ -142,7 +143,7 @@ def get_free_bikes(client) -> tuple:
         try:
             public_key.verify(signature, hash, signature_algorithm)
         except:
-            print("Signature check failed")
+            # print("Signature check failed")
             continue
             
         # Check timestamp plausibility
@@ -164,7 +165,7 @@ def get_free_bikes(client) -> tuple:
         else:
             timeDelta = timestamp - timestampMilestone
         if timeDelta.seconds > 300: # more than 5 minutes
-            print("Timestamp too far from milestone")
+            # print("Timestamp too far from milestone")
             continue
 
         #print(free_bike, hash)
@@ -197,10 +198,12 @@ def send_value(client, seed:str, account_index:int = 0, address:str = "", value:
         index=index,
         data= data
     )
-    print("Send %d to %s with index: %s and message: %s" %(value, address, index, message['message_id']))
+    print("Send %d IOTAs to %s with index: %s and message: %s" %(value, address, index, message['message_id']), end='', flush=True)
     if wait_confirmation:
         client.retry_until_included(message_id = message['message_id'])
-        print("Now confirmed")
+        print(" - now confirmed")
+    else:
+        print('')
     return message
 
 
@@ -227,7 +230,7 @@ def request_to_rent_a_bike(client, seed:str, account_index:int, provider_address
     bike_request_object = {'version': '0.1',
         'refund_address': refund_address,
         'public_key': str(serialized_public)}
-    print(bike_request_object)
+    # print(bike_request_object)
     message = json.dumps(bike_request_object).encode('utf-8')
 
     send_value(client, seed=seed, account_index=0, address=provider_address, value= 5_000_000, index=message_index, data=message, wait_confirmation=True)
@@ -244,7 +247,7 @@ def find_bike_rental_request(client, seed:str, account_index=0, rental_address_i
     outputs = client.get_address_outputs(rental_address, {'include_spent': False})
     #print(outputs)
     for output in outputs:
-        print('Output: %s' % output)
+        # print('Output: %s' % output)
         transaction_id = "".join(f"{i:0>2x}" for i in output["transaction_id"])
         transaction_index = output["index"]
         # Note: 4 bytes index id '0' needs to be added to the transaction id
@@ -263,24 +266,24 @@ def find_bike_rental_request(client, seed:str, account_index=0, rental_address_i
         data = bytearray(essence['payload']['indexation'][0]['data']).decode("utf-8")
         bike_request_object = json.loads(data)
 
-        print('bike_request_object = %s' % bike_request_object)
+        # print('bike_request_object = %s' % bike_request_object)
 
         if 'version' not in bike_request_object:
-            print('No version')
+            # print('No version')
             continue
         if bike_request_object['version'] != '0.1':
-            print('Version does not match: %s' % bike_request_object['version'])
+            # print('Version does not match: %s' % bike_request_object['version'])
             continue
         if 'refund_address' not in bike_request_object:
-            print('No refund_address')
+            # print('No refund_address')
             continue
         refund_address = bike_request_object['refund_address']
         if not client.is_address_valid(refund_address):
-            print('refund_address: %s is not valid' % refund_address)
+            # print('refund_address: %s is not valid' % refund_address)
             continue
 
         if 'public_key' not in bike_request_object:
-            print('No public_key')
+            # print('No public_key')
             continue
         #print("Public as on tangle: %s" % bike_request_object['public_key'].replace('\\n', '\n'))
         public_key_serialized = bytes(bike_request_object['public_key'][2:-1].replace('\\n', '\n').encode())
@@ -313,8 +316,9 @@ def release_bike(client, seed:str, account_index=0, rental_address_index=0, mini
                     }
                 ],
                 index="Rent a bike rejected")
+            print("Rejected bike hire due too low deposit, returned fund, message id: %s " % message, end='', flush=True)
             client.retry_until_included(message_id = message['message_id'])
-            print("Rejected bike hire due too low deposit, returned fund, message id: %s " % message)
+            print("  - now confirmed")
             continue
 
         # TODO: Check if a confiormation alrady has been send
@@ -352,8 +356,9 @@ def create_dust_allowed_address(client, seed:str, account_index:int = 0, dust_ad
             }
         ]
     )
+    print("Dust is now allowed for %s" % dust_address, end='', flush=True)
     client.retry_until_included(message_id = message['message_id'])
-    print("Dust is now allowed for %s" % dust_address)
+    print(" - now confirmed")
     return message['message_id']
 
 
@@ -368,25 +373,25 @@ def return_bike(client, seed:str, account_index, public_key:ec.EllipticCurvePubl
         find_bike_rental_request(client, seed=seed, account_index=account_index, rental_address_index=rental_address_index)
     result_index = -1
     for output_detail in validated_outputs:
-        print("Found one bike request: %s" % output_detail)
+        # print("Found one bike request: %s" % output_detail)
         result_index = result_index + 1
 
         if validated_pubic_keys[result_index] == serialized_public_key:
             amount = int(output_detail['output']['signature_locked_single']['amount'])
-            print("Ammoun to split: %s" % '{:,}'.format(amount))
+            # print("Amount to split: %s" % '{:,}'.format(amount))
 
             bike_charge  = int(1_000_000 + time_used.total_seconds() * 100_000 / 3600)  # base + hourly fee
             insurance_charge = int(time_used.total_seconds() * 50_000 / 3600)  # hourly fee insurance
-            argent_charge = int(200_000 + time_used.total_seconds() * 30_000 / 3600) # base + hourly fee
-            total_return = amount - bike_charge - insurance_charge - argent_charge
+            agent_charge = int(200_000 + time_used.total_seconds() * 30_000 / 3600) # base + hourly fee
+            total_return = amount - bike_charge - insurance_charge - agent_charge
 
             # just the unlikley case we have not enough deposit
             if total_return < 1_000_000:    # we need at least 1Mi to return, or nothing
                 agent_charge = agent_charge + total_return
                 total_return = 0
-            if argent_charge < 0:
-                bike_charge = bike_charge + argent_charge
-                argent_charge = 0
+            if agent_charge < 0:
+                bike_charge = bike_charge + agent_charge
+                agent_charge = 0
             if bike_charge < 0:
                 insurance_charge = insurance_charge + bike_charge
                 bike_charge = 0
@@ -403,29 +408,42 @@ def return_bike(client, seed:str, account_index, public_key:ec.EllipticCurvePubl
                                 'address': address_insurance_charge,
                                 'amount': insurance_charge,
                             })
-            if argent_charge > 0:
-                if argent_charge >= 1_000_000 or is_dust_enabled(client, address_agent_charge):  
+                else:
+                    insurance_charge = 0 
+            if agent_charge > 0:
+                if agent_charge >= 1_000_000 or is_dust_enabled(client, address_agent_charge):  
                     outputs.append({
                                 'address': address_agent_charge,
-                                'amount': argent_charge,
+                                'amount': agent_charge,
                             })
+                else:
+                    agent_charge = 0
             if bike_charge > 0:
                 if bike_charge >= 1_000_000 or is_dust_enabled(client, address_operator_charge):  
                     outputs.append({
                                 'address': address_operator_charge,
                                 'amount': bike_charge,
                             })
+                else:
+                    bike_charge = 0
             input = {'transaction_id': validated_transaction_ids[result_index], 'index': validated_transaction_indexes[result_index]}
-            print("Output: %s", outputs)
+            # print("Output: %s", outputs)
 
             message = client.message(
                 seed=seed,
                 inputs=[input],
                 outputs=outputs,
                 index="Rent a bike return")
-            print("Calculated fees and closed the deal, message id: %s " % message['message_id'])
+            print("Calculated fees and closed the deal: insurance: %s, agent: %s, bike operator: %s, return user: %s, message id: %s " % 
+                ("{:,}".format(insurance_charge),
+                    "{:,}".format(agent_charge),
+                    "{:,}".format(bike_charge),
+                    "{:,}".format(total_return),
+                    message['message_id'] 
+                ), 
+                end='', flush=True)
             client.retry_until_included(message_id = message['message_id'])
-            print("Now confirmed")
+            print(" - now confirmed")
             return message
 
     return None
@@ -458,6 +476,7 @@ if __name__ == '__main__':
 
     # enable test cases
     use_own_node = True
+    hold_on_steps = True
     list_addresses_account_a = True
     list_addresses_account_b = True
     do_allow_dust_addresses = True
@@ -474,6 +493,7 @@ if __name__ == '__main__':
     else:
         client = iota_client.Client(nodes_name_password=[["https://chrysalis-nodes.iota.org"]], local_pow=True)
     check_health(client)
+    if hold_on_steps: input('Press enter to continue')
 
     rental_address_index = 0
     rental_address = client.get_addresses(seed=seedAccountB, account_index=0,input_range_begin=rental_address_index,input_range_end=rental_address_index+1, get_all=False)[rental_address_index][0]
@@ -492,6 +512,7 @@ if __name__ == '__main__':
     if list_addresses_account_b:
         print()
         list_account_balance_and_addresses(client, seed=seedAccountB, account_index=0, number_addresses=6, name="Account B (agent and bike operator)")
+        if hold_on_steps: input('Press enter to continue')
 
     # enable dust on addresses
     if do_allow_dust_addresses:
@@ -501,12 +522,14 @@ if __name__ == '__main__':
             create_dust_allowed_address(client, seedAccountA, account_index=0, dust_address=bike_operator_address, number_of_dust_transactions=10)
         if not is_dust_enabled(client, insurance_address):
             create_dust_allowed_address(client, seedAccountA, account_index=0, dust_address=insurance_address, number_of_dust_transactions=10)
+        if hold_on_steps: input('Press enter to continue')
 
     # publish a free bike message
     if do_publish_free_bikes:
         free_bikes = random.randrange(10,50)
-        publish_free_bikes(client, free_bikes, deposit=minimum_deposit)
-        print('Published that we have %d bikes to rent' % free_bikes)
+        message = publish_free_bikes(client, free_bikes, deposit=minimum_deposit)
+        print('Published that we have %d bikes to rent with message: %s' % (free_bikes, message['message_id']))
+        if hold_on_steps: input('Press enter to continue')
         
     if do_get_free_bikes or do_request_rent_a_bike:
         free_bikes,  minimum_deposit, timestamp_published = get_free_bikes(client)
@@ -520,9 +543,11 @@ if __name__ == '__main__':
                 consolidate_outputs(client=client, seed=seedAccountA, account_index=0)
                 request_to_rent_a_bike(client=client, seed=seedAccountA, account_index=0,
                     provider_address= rental_address, deposit=minimum_deposit, public_key=public_key_value_text_bike_user())
+        if hold_on_steps: input('Press enter to continue')
 
     if do_release_bike:
         release_bike(client, seedAccountB, account_index=0, rental_address_index=rental_address_index, minimum_deposit=minimum_deposit)
+        if hold_on_steps: input('Press enter to continue')
     
     if do_return_bike:
         message = return_bike (client, seed=seedAccountB, account_index=0, 
@@ -532,6 +557,7 @@ if __name__ == '__main__':
             print("Bike returned")
         else:
             print("No bike rental open")
+        if hold_on_steps: input('Press enter to continue')
 
     if do_reset_funds:
         reset_address = client.get_addresses(seed=seedAccountA, account_index=0,input_range_begin=0,input_range_end=1, get_all=False)[0][0]
@@ -549,10 +575,12 @@ if __name__ == '__main__':
                 print("Cannot sent dust around")
             else:
                 send_value(client, seed=seedAccountA, account_index=0, address=reset_address, value=balance, wait_confirmation=True)
+        if hold_on_steps: input('Press enter to continue')
         
     if do_send_back_tofirefly:
         send_back_funds_to_firefly_account(client, seed = seedAccountA, account_index = 0)
         send_back_funds_to_firefly_account(client, seed = seedAccountB, account_index = 0)
+        if hold_on_steps: input('Press enter to continue')
 
     if list_addresses_account_a:
         print()
