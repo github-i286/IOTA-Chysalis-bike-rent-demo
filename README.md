@@ -1,4 +1,4 @@
-# IOTA-Chysalis-bike-rent-demo
+# IOTA Chysalis Bike Rent Demo
  This code demonstrates a prototype of a bike rental system in IOTA 1.5 (Chrysalis)
 
  You can find documentation about programming on Chrysalis network here: https://chrysalis.docs.iota.org/
