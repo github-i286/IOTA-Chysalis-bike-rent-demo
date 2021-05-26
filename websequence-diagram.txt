@@ -1,22 +1,27 @@
 # use with https://www.websequencediagrams.com/
-title IOTA Bike Rental
+title IOTA Bike Rental Demo in Python
 
 actor Customer
 actor Agent
-actor Operator
+actor Bike-Operator
 
 note over Customer, Agent: Transactions on IOTA Tagle
-note over Agent, Operator: Direct HTTPS connection
+note over Agent, Bike-Operator: Direct internet connection
 
-Operator->Customer: Publish x free bikes, minimum deposit
+Agent->(2)Customer: Publish x free bikes, minimum deposit
+Agent-->(2)Customer: Publish x free bikes, minimum deposit
 
-Customer->Agent: Request Bike, x Mi Deposit, Change Address, My PK
-Agent->Operator: Provide cutsomer public key
-Customer->Operator: Opens bike, bikes verifies public key (sign a challange)
-Customer->Operator: Return bike
-Operator->Agent: Bike Return, hh:mm in use
+Customer->Agent: Request Bike, provide deposit, change address, PubK
+Agent->Customer: Confirmation transaction
+Customer->Bike-Operator: Opens bike, bikes verifies owner of PubK (sign a challange)
+loop Uses bike
+    Customer->(2)Customer:
+end
+Customer->Bike-Operator: Return bike
+Bike-Operator->Agent: Bike Return, hh:mm in use
 
-note over Customer, Agent, Operator: Transactions on IOTA Tagle
-Agent->Customer: Returs rest value
-Agent->Operator: Pay operator fee (microtransaction)
-Agent->Agent: Keep agent fee
+note over Customer, Agent, Bike-Operator: Transactions on IOTA Tagle
+Agent->Bike-Operator: Pay operator fee (microtransaction)
+Agent->Agent: Insurance fee (microtransaction)
+Agent->Agent: Keep agent fee (microtransaction)
+Agent->Customer: Returs remaining deposit

@@ -485,13 +485,38 @@ if __name__ == '__main__':
     do_request_rent_a_bike = True
     do_release_bike = True
     do_return_bike = True
-    do_reset_funds = False
-    do_send_back_tofirefly = False
 
     if use_own_node:
         client = iota_client.Client(nodes_name_password=[[own_node_url]], local_pow=True)
     else:
         client = iota_client.Client(nodes_name_password=[["https://chrysalis-nodes.iota.org"]], local_pow=True)
+
+    if len(sys.argv) > 1 and sys.argv[1].lower() == 'reset':
+        reset_address = client.get_addresses(seed=seedAccountA, account_index=0,input_range_begin=0,input_range_end=1, get_all=False)[0][0]
+        balance = get_balance (client, seed=seedAccountB, account_index=0)
+        if balance > 0:
+            if balance < 1_000_000:
+                print("Cannot sent dust back to A")
+            else:
+                send_value(client, seed=seedAccountB, account_index=0, address=reset_address, value=balance, wait_confirmation=True)
+
+        # also consolidate all UTXOs on A into one UTXO to avoid possible dust
+        balance = get_balance (client, seed=seedAccountA, account_index=0)
+        if balance > 0:
+            if balance < 1_000_000:
+                print("Cannot sent dust around")
+            else:
+                send_value(client, seed=seedAccountA, account_index=0, address=reset_address, value=balance, wait_confirmation=True)
+        print("All funds habe been reset to account A")
+        sys.exit(0)
+
+    if len(sys.argv) > 1 and sys.argv[1].lower() == 'backtofirefly':
+        send_back_funds_to_firefly_account(client, seed = seedAccountA, account_index = 0)
+        send_back_funds_to_firefly_account(client, seed = seedAccountB, account_index = 0)
+        print("All funds habe been returned to FireFly")
+        sys.exit(0)
+
+
     check_health(client)
     if hold_on_steps: input('Press enter to continue')
 
@@ -537,10 +562,10 @@ if __name__ == '__main__':
         if free_bikes <= 0:
             print("Sorry, no bikes available")
         else:     
-            print("We have %d bikes to rent, last published on %s" % (free_bikes, timestamp_published.astimezone()))
-        
+            print("We have %d bikes to rent, minimum deposit is %s IOTA, last published on %s" % (free_bikes, '{:,}'.format(minimum_deposit), timestamp_published.astimezone()))
+            if hold_on_steps: input('Press enter to continue')    
             if do_request_rent_a_bike:
-                consolidate_outputs(client=client, seed=seedAccountA, account_index=0)
+                # consolidate_outputs(client=client, seed=seedAccountA, account_index=0)
                 request_to_rent_a_bike(client=client, seed=seedAccountA, account_index=0,
                     provider_address= rental_address, deposit=minimum_deposit, public_key=public_key_value_text_bike_user())
         if hold_on_steps: input('Press enter to continue')
@@ -558,30 +583,7 @@ if __name__ == '__main__':
         else:
             print("No bike rental open")
         if hold_on_steps: input('Press enter to continue')
-
-    if do_reset_funds:
-        reset_address = client.get_addresses(seed=seedAccountA, account_index=0,input_range_begin=0,input_range_end=1, get_all=False)[0][0]
-        balance = get_balance (client, seed=seedAccountB, account_index=0)
-        if balance > 0:
-            if balance < 1_000_000:
-                print("Cannot sent dust back to A")
-            else:
-                send_value(client, seed=seedAccountB, account_index=0, address=reset_address, value=balance, wait_confirmation=True)
-
-        # also consolidate all UTXOs on A into one UTXO to avoid possible dust
-        balance = get_balance (client, seed=seedAccountA, account_index=0)
-        if balance > 0:
-            if balance < 1_000_000:
-                print("Cannot sent dust around")
-            else:
-                send_value(client, seed=seedAccountA, account_index=0, address=reset_address, value=balance, wait_confirmation=True)
-        if hold_on_steps: input('Press enter to continue')
         
-    if do_send_back_tofirefly:
-        send_back_funds_to_firefly_account(client, seed = seedAccountA, account_index = 0)
-        send_back_funds_to_firefly_account(client, seed = seedAccountB, account_index = 0)
-        if hold_on_steps: input('Press enter to continue')
-
     if list_addresses_account_a:
         print()
         list_account_balance_and_addresses(client, seed=seedAccountA, account_index=0, number_addresses=3, name="Account A (customer)")
