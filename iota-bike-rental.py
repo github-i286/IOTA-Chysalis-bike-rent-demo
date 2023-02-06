@@ -11,7 +11,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.exceptions import InvalidSignature
 from datetime import datetime, date, time, timezone, timedelta
 
-from secret_seed import own_node_url, seedAccountA, seedAccountB, fire_fly_return_address, private_key_value_text_bike_operator, public_key_value_text_bike_operator, \
+from secret_seed_private import own_node_url, seedAccountA, seedAccountB, fire_fly_return_address, private_key_value_text_bike_operator, public_key_value_text_bike_operator, \
     private_key_value_text_bike_user, public_key_value_text_bike_user 
 
 import iota_client
@@ -85,7 +85,7 @@ def sign_data(private_key: bytes, input:bytes) -> bytes:
     return private_key.sign(data=input, signature_algorithm=signature_algorithm)
 
 
-def hast_string(input: str) -> bytes:
+def hash_string(input: str) -> bytes:
     hash_data = hashlib.sha256()
     hash_data.update(input.encode('utf-8'))
     return hash_data.hexdigest().encode()
@@ -96,7 +96,7 @@ def publish_free_bikes(client, free_bikes: int, deposit:int = 5_000_000) -> str:
     free_bike = {"version": "0.1", "free_bikes": free_bikes, "deposit": deposit, "timestamp": timestamp}
     free_bike_message = json.dumps(free_bike)
 
-    hash = hast_string(free_bike_message)
+    hash = hash_string(free_bike_message)
     hash_signature = sign_data(private_key_value_text_bike_operator, hash)
 
     publish_message_object = {"free_bike": free_bike, "signature": hash_signature.hex()}
@@ -326,7 +326,7 @@ def release_bike(client, seed:str, account_index=0, rental_address_index=0, mini
         bike_rental_confirmation = {'address': valudated_refund_addresses[result_index], 'transaction_id': validated_transaction_ids[result_index], 'status': 'OK'}
         bike_rental_confirmation_message = json.dumps(bike_rental_confirmation)
 
-        hash = hast_string(bike_rental_confirmation_message)
+        hash = hash_string(bike_rental_confirmation_message)
         hash_signature = sign_data(private_key_value_text_bike_operator, hash)                
         publish_message_object = {"bike_rental_confirmation": bike_rental_confirmation_message, "signature": hash_signature.hex()}
         publish_message = json.dumps(publish_message_object)
